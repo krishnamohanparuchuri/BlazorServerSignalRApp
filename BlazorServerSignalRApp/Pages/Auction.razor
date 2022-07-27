@@ -1,0 +1,70 @@
+﻿@page "/auction"
+@using Microsoft.AspNetCore.SignalR.Client
+@inject NavigationManager NavigationManager
+@inject ItemService ItemService
+
+<PageTitle>List of Available Items For Auction</PageTitle>
+<h1>List of Available Items For Auction</h1>
+
+@if (Items == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Price</th>
+                <th>Update Bid</th>
+
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in Items)
+            {
+                <tr>
+                    <td>@item.Name</td>
+                    <td>@item.Price</td>
+                    <td>
+                        <input @bind="@item.Price" />
+                        <button @onclick="@(()=>Send(@item.Id, @item.Price))" class="btn btn-primary">save</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+
+@code {
+    private List<Item> Items;
+    private decimal newBidValue;
+    private HubConnection? hubConnection;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Items = await ItemService.GetItems();
+
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(NavigationManager.ToAbsoluteUri("/auction"))
+            .Build();
+
+        hubConnection.On<int, decimal>("UpdatedBid", (id, newBidValue) =>
+        {
+            Items.FirstOrDefault(x => x.Id == id).Price = newBidValue;
+            InvokeAsync(StateHasChanged);
+        });
+
+        await hubConnection.StartAsync();
+    }
+
+    private async Task Send(int id, decimal price)
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.SendAsync("SendNewBid", id, price);
+        }
+    }
+}
